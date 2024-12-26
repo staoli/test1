@@ -1,0 +1,34 @@
+---
+- name: Configure dump settings
+  hosts: all
+  gather_facts: false
+  become: true
+  remote_user: ost
+
+  tasks:
+   - name: just a test
+     ansible.builtin.shell:
+       cmd: sysdumpdev -l
+     register: out
+
+   - name: print before output
+     ansible.builtin.debug:
+       var: out
+
+   - name: configure sysdump
+     sysdumpdev:
+       secondary: /dev/dump1
+       permanent: true
+       copy_directory: /var/adm/ras
+       forced_copy_flag: True
+       #dump_type: traditional
+       dump_type: fw-assisted
+       dump_mode: allow_kernel
+     register: dout
+
+   - name: print after output
+     ansible.builtin.debug:
+       var: dout
+#copy_directory=/var/adm/ras forced_copy_flag=False dump_type=fw-assisted dump_mode=disallow'
+
+...
