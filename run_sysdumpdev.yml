@@ -24,7 +24,9 @@
        #dump_type: traditional
        dump_type: fw-assisted
        dump_mode: allow_kernel
+       #dump_mode: disallow
      register: dout
+     tags: dump
 
    - name: print after output
      ansible.builtin.debug:

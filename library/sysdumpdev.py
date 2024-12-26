@@ -257,19 +257,18 @@ def run_module():
 
     change_dump_mode = False
     if current_config['dump_type'] != 'fw-assisted':
-      module.fail_json(msg='dump_type must be fw-assisted before you configure dump_mode', **result)
+      print('11111111')
+      #module.fail_json(msg='dump_type must be fw-assisted before you configure dump_mode', **result)
       if module.params['dump_mode'] is not None:
+          print('22222222')
           if 'dump_mode' in current_config.keys():
+            print('33333333')
             if module.params['dump_mode'] != current_config['dump_mode']:
+              print('444444444')
               change_dump_mode = True
-              #cmd_args.append('-f')
-              #cmd_args.append(module.params['dump_mode'])
-              #result['changed'] = True
           else:
-              change_dump_mode = True
-              #cmd_args.append('-f')
-              #cmd_args.append(module.params['dump_mode'])
-              #result['changed'] = True
+              print('5555555')
+              change_dump_mode = False
 
           if change_dump_mode:
               cmd_args.append('-f')
@@ -279,8 +278,6 @@ def run_module():
     if result['changed']:
       set_dump_result = set_dump_config(module, cmd_args)
       result['command'] = set_dump_result['cmd']
-      #result['stdout'] = set_dump_result['stdout']
-      #result['stderr'] = set_dump_result['stderr']
       result['original_config'] = current_config
 
         #result['command'] = 'not none'
