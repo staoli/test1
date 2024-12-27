@@ -108,6 +108,10 @@ def get_dump_config(module):
             dump_config[a] = True
         if isinstance(dump_config[a], str) and dump_config[a] == 'FALSE':
             dump_config[a] = False
+        if isinstance(dump_config[a], str) and dump_config[a] == 'ON':
+            dump_config[a] = True
+        if isinstance(dump_config[a], str) and dump_config[a] == 'OFF':
+            dump_config[a] = False
 
     return dict(dump_config)
 
@@ -132,6 +136,7 @@ def set_dump_config(module, cmd_args):
 def run_module():
     # define available arguments/parameters a user can pass to the module
     module_args = dict(
+        state=dict(type='str', required=False, choices=['present', 'info'], default='info'),
         primary=dict(type='path', required=False),
         secondary=dict(type='path', required=False),
         permanent=dict(type='bool', required=False),
@@ -152,6 +157,7 @@ def run_module():
         command='',
         stdout='',
         stderr='',
+        sysdumpdev_config='',
         original_config=''
     )
 
@@ -184,110 +190,70 @@ def run_module():
 
     current_config = get_dump_config(module)
 
-    result['original_config'] = current_config 
+    if module.params['state'] == 'info':
+      result['sysdumpdev_config'] = current_config 
+    else:
+      result['original_config'] = current_config 
 
-    cmd_args = []
+      cmd_args = []
 
-    if module.params['primary'] is not None and ( module.params['primary'] != current_config['primary'] ):
-        cmd_args.append('-p')
-        cmd_args.append(module.params['primary'])
-        result['changed'] = True
+      if module.params['primary'] is not None and ( module.params['primary'] != current_config['primary'] ):
+          cmd_args.append('-p')
+          cmd_args.append(module.params['primary'])
+          result['changed'] = True
 
-    if module.params['secondary'] is not None and ( module.params['secondary'] != current_config['secondary'] ):
-        cmd_args.append('-s')
-        cmd_args.append(module.params['secondary'])
-        result['changed'] = True
+      if module.params['secondary'] is not None and ( module.params['secondary'] != current_config['secondary'] ):
+          cmd_args.append('-s')
+          cmd_args.append(module.params['secondary'])
+          result['changed'] = True
 
-    if module.params['permanent']:
-        cmd_args.append('-P')
+      if module.params['permanent']:
+          cmd_args.append('-P')
 
-    target_copy_directory = current_config['copy_directory']
-    target_forced_copy_flag = current_config['forced_copy_flag']
-    copy_directory_change = False
-    forced_copy_flag_change = False
+      target_copy_directory = current_config['copy_directory']
+      target_forced_copy_flag = current_config['forced_copy_flag']
+      copy_directory_change = False
+      forced_copy_flag_change = False
 
-    if module.params['copy_directory'] is not None and (module.params['copy_directory'] != current_config['copy_directory']):
-        copy_directory_change = True
-        target_copy_directory = module.params['copy_directory']
+      if module.params['copy_directory'] is not None and (module.params['copy_directory'] != current_config['copy_directory']):
+          copy_directory_change = True
+          target_copy_directory = module.params['copy_directory']
 
-    if module.params['forced_copy_flag'] is not None and (module.params['forced_copy_flag'] != current_config['forced_copy_flag']):
-        forced_copy_flag_change = True
-        target_forced_copy_flag = module.params['forced_copy_flag']
+      if module.params['forced_copy_flag'] is not None and (module.params['forced_copy_flag'] != current_config['forced_copy_flag']):
+          forced_copy_flag_change = True
+          target_forced_copy_flag = module.params['forced_copy_flag']
 
-    if copy_directory_change or forced_copy_flag_change:
-        if target_forced_copy_flag == True:
-            cmd_args.append('-D')
-        else:
-            cmd_args.append('-d')
-        result['changed'] = True
-        cmd_args.append(target_copy_directory)
-
-    #if module.params['copy_directory'] is not None and (module.params['copy_directory'] != current_config['copy_directory']):
-    #    if module.params['forced_copy_flag'] == True:
-    #        cmd_args.append('-D')
-    #    else:
-    #        cmd_args.append('-d')
-    #    result['changed'] = True
-    #    cmd_args.append(module.params['copy_directory'])
-
-    #if module.params['forced_copy_flag'] is not None and (module.params['forced_copy_flag'] != current_config['forced_copy_flag']):
-    #    if module.params['forced_copy_flag'] == True:
-    #        cmd_args.append('-D')
-    #    else:
-    #        cmd_args.append('-d')
-    #    result['changed'] = True
-    #    cmd_args.append(module.params['copy_directory'])
-
-        #forced_copy_flag=dict(type='bool', required=False),
-
-    if module.params['always_allow_dump'] is not None:
-        if module.params['always_allow_dump']:
-            cmd_args.append('-K')
-        else:
-            cmd_args.append('-k')
-
-    if module.params['dump_type'] is not None and (module.params['dump_type'] != current_config['dump_type']) :
-        cmd_args.append('-t')
-        cmd_args.append(module.params['dump_type'])
-        result['changed'] = True
-
-    #if module.params['dump_mode'] is not None and ( current_config['dump_type'] == 'fw-assisted') and (module.params['dump_mode'] != current_config['dump_mode']) :
-    #if module.params['dump_mode'] is not None:
-    #if module.params['dump_mode'] is not None and (module.params['dump_mode'] != current_config['dump_mode']):
-
-    change_dump_mode = False
-    if current_config['dump_type'] != 'fw-assisted':
-      print('11111111')
-      #module.fail_json(msg='dump_type must be fw-assisted before you configure dump_mode', **result)
-      if module.params['dump_mode'] is not None:
-          print('22222222')
-          if 'dump_mode' in current_config.keys():
-            print('33333333')
-            if module.params['dump_mode'] != current_config['dump_mode']:
-              print('444444444')
-              change_dump_mode = True
+      if copy_directory_change or forced_copy_flag_change:
+          if target_forced_copy_flag == True:
+              cmd_args.append('-D')
           else:
-              print('5555555')
-              change_dump_mode = False
+              cmd_args.append('-d')
+          result['changed'] = True
+          cmd_args.append(target_copy_directory)
 
-          if change_dump_mode:
-              cmd_args.append('-f')
-              cmd_args.append(module.params['dump_mode'])
-              result['changed'] = True
+      if module.params['always_allow_dump'] is not None:
+          if module.params['always_allow_dump']:
+              cmd_args.append('-K')
+          else:
+              cmd_args.append('-k')
 
-    if result['changed']:
-      set_dump_result = set_dump_config(module, cmd_args)
-      result['command'] = set_dump_result['cmd']
-      result['original_config'] = current_config
+      if module.params['dump_type'] is not None and (module.params['dump_type'] != current_config['dump_type']) :
+          cmd_args.append('-t')
+          cmd_args.append(module.params['dump_type'])
+          result['changed'] = True
 
-        #result['command'] = 'not none'
-        #module.fail_json(msg='You requested this to fail', **result)
-    #else:
-    #    result['command'] = 'was none'
-    #if module.params['always_allow_dump']:
-    #    result['command'] = 'was'
-    #else:
-    #    result['command'] = 'was not'
+      if module.params['dump_mode'] is not None:
+        if current_config['dump_type'] != 'fw-assisted':
+          module.fail_json(msg='dump_type must be fw-assisted before you configure dump_mode', **result)
+        elif ( current_config['dump_type'] == 'fw-assisted' ) and ( module.params['dump_mode'] != current_config['dump_mode']):
+          cmd_args.append('-f')
+          cmd_args.append(module.params['dump_mode'])
+          result['changed'] = True
+
+      if result['changed']:
+        set_dump_result = set_dump_config(module, cmd_args)
+        result['command'] = set_dump_result['cmd']
+        result['original_config'] = current_config
 
     # manipulate or modify the state as needed (this is going to be the
     # part where your module will do what it needs to do)
