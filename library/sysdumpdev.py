@@ -29,7 +29,6 @@ options:
     primary:
         description:
             - Specifies the primary dump device
-        required: false
         type: str
     secondary:
         description:
@@ -38,24 +37,23 @@ options:
         type: str
     permanent:
         description:
-            - Makes updates to the primary or secondary dump device permanent
-        required: false
+            - Makes updates to the O(primary) or O(secondary) dump device setting permanent
         type: bool
     copy_directory:
         description:
-            - Specifies the directory the dump is copied to at system boot
+            - Specifies the directory to where the dump is copied to at system boot
         required: false
         type: str
     forced_copy_flag:
         description:
-            - When set to False specifies to ignore the system dump if the copy fails at boot time.
-            - When set to True specifies to copy the system dump to an external media if the copy fails at boot time.
-        required: false
+            - If set to V(true) specifies to copy the system dump to an external media if the copy fails at boot time.
+            - If set to V(false) specifies to ignore the system dump if the copy fails at boot time.
+            - Requires the O(copy_directory) option to be specified
         type: bool
     always_allow_dump:
         description:
-            - When set to False and if your machine has a key mode switch, it is required to be in the service position before a dump can be forced with the dump key sequences.
-            - When set to True and if your machine has a key mode switch, the reset button or the dump key sequences will force a dump with the key in the normal position.
+            - If set to V(true) and if your machine has a key mode switch, the reset button or the dump key sequences will force a dump with the key in the normal position.
+            - If set to V(false) and if your machine has a key mode switch, it is required to be in the service position before a dump can be forced with the dump key sequences.
         required: false
         type: bool
     dump_type:
@@ -70,9 +68,16 @@ options:
             - C(disallow) specifies that neither the full memory system dump mode nor the kernel memory system dump mode is allowed. It is the selective memory mode.
             - C(allow_full) specifies that the full memory system dump mode is allowed but is performed only when operating system cannot properly handle the dump request.
             - C(require_full) specifies that the full memory system dump mode is allowed and is always performed.
+            - Requires the O(dump_type=fw-assisted) option to be specified
         required: false
         choices: ['disallow', 'allow', 'allow_kernel', 'require_kernel', 'allow_full', 'require_full']
         type: str
+
+notes: 
+    - You can refer to the IBM documentation for additional information on the commands used at
+      U(https://www.ibm.com/docs/en/aix/7.3?topic=s-sysdumpdev-command)
+      U(https://www.ibm.com/docs/en/aix/7.2?topic=s-sysdumpdev-command)
+
 # Specify this value according to your collection
 # in format of namespace.collection.doc_fragment_name
 # extends_documentation_fragment:
@@ -83,37 +88,64 @@ author:
 '''
 
 EXAMPLES = r'''
-# Pass in a message
-- name: Test with a message
-  my_namespace.my_collection.my_test:
-    name: hello world
+- name: Configure primary and secondary dump devices permanently
+  ibm.power_aix.sysdumpdev:
+      primary: /dev/sysdump0
+      secondary: /dev/sysdump1
+      permanent: True
 
-# pass in a message and have changed true
-- name: Test with a message and changed output
-  my_namespace.my_collection.my_test:
-    name: hello world
-    new: true
+- name: Configure system dump copy directory and set the forced copy flag to False
+  ibm.power_aix.sysdumpdev:
+       copy_directory: /var/adm/ras
+       forced_copy_flag: True
 
-# fail the module
-- name: Test failure of the module
-  my_namespace.my_collection.my_test:
-    name: fail me
+- name: Configure fw-assisted and allow full memory system dump mode always be performed.
+  ibm.power_aix.sysdumpdev:
+       dump_type: fw-assisted
+       dump_mode: require_full
+
 '''
 
 RETURN = r'''
 # These are examples of possible return values, and in general should use other names for return values.
-original_message:
-    description: The original name param that was passed in.
+command:
+    description: The sysdumpdev command which was executed
     type: str
     returned: always
-    sample: 'hello world'
-message:
-    description: The output message that the test module generates.
-    type: str
+    sample: 'sysdumpdev -D /var/adm/ras'
+sysdumpdev_config:
+    description: The current sysdumpdev settings
+    type: dict
+    returned: If O(state=info) is specified
+    sample: '"sysdumpdev_config": {
+                "always_allow_dump": true,
+                "copy_diretory": "/var/adm/ras",
+                "dump_compression": true,
+              }'
+msg:
+    description: The execution message.
     returned: always
-    sample: 'goodbye'
+    type: str
+rc:
+    description: The return code.
+    returned: If the command failed.
+    type: int
+stdout:
+    description: The standard output.
+    returned: If the command failed.
+    type: str
+stderr:
+    description: The standard error.
+    returned: If the command failed.
+    type: str
 '''
 
+#    result = dict(
+#        changed=False,
+#        command='',
+#        stdout='',
+#        stderr='',
+#        sysdumpdev_config='',
 from ansible.module_utils.basic import AnsibleModule
 
 def get_dump_config(module):
