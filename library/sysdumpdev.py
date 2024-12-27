@@ -9,34 +9,77 @@ __metaclass__ = type
 
 DOCUMENTATION = r'''
 ---
-module: my_test
+module: sysdumpdev
 
-short_description: This is my test module
+short_description: Manage system dump settings
 
-# If this is part of a collection, you need to use semantic versioning,
-# i.e. the version is of the form "2.5.0" and not "2.4".
 version_added: "1.0.0"
 
-description: This is my longer description explaining my test module.
+description: This module allows to update and display the system dump settings using the sysdumpdev command
 
 options:
-    name:
-        description: This is the message to send to the test module.
-        required: true
+    state:
+        description: 
+        - Specifies the action to be performed
+        - C(present) specifies to update the system dump settings
+        - C(info) specifies to retrieve the current system dump settings
+        choices: ['present', 'info']
+        default: info
         type: str
-    new:
+    primary:
         description:
-            - Control to demo if the result of this module is changed or not.
-            - Parameter description can be a list as well.
+            - Specifies the primary dump device
+        required: false
+        type: str
+    secondary:
+        description:
+            - Specifies the secondary dump device
+        required: false
+        type: str
+    permanent:
+        description:
+            - Makes updates to the primary or secondary dump device permanent
         required: false
         type: bool
+    copy_directory:
+        description:
+            - Specifies the directory the dump is copied to at system boot
+        required: false
+        type: str
+    forced_copy_flag:
+        description:
+            - When set to False specifies to ignore the system dump if the copy fails at boot time.
+            - When set to True specifies to copy the system dump to an external media if the copy fails at boot time.
+        required: false
+        type: bool
+    always_allow_dump
+        description:
+            - When set to False and if your machine has a key mode switch, it is required to be in the service position before a dump can be forced with the dump key sequences.
+            - When set to True and if your machine has a key mode switch, the reset button or the dump key sequences will force a dump with the key in the normal position.
+        required: false
+        type: bool
+    dump_type:
+        description:
+            - Specifies whether a traditional or fw-assisted system dump is performed
+        required: false
+        choices: ['traditional', 'fw-assisted']
+        type: str
+    dump_mode:
+        description:
+            - Specifies the dump mode
+            - C(disallow) specifies that neither the full memory system dump mode nor the kernel memory system dump mode is allowed. It is the selective memory mode.
+            - C(allow_full) specifies that the full memory system dump mode is allowed but is performed only when operating system cannot properly handle the dump request.
+            - C(require_full) specifies that the full memory system dump mode is allowed and is always performed.
+        required: false
+        choices: ['disallow', 'allow', 'allow_kernel', 'require_kernel', 'allow_full', 'require_full']
+        type: str
 # Specify this value according to your collection
 # in format of namespace.collection.doc_fragment_name
 # extends_documentation_fragment:
 #     - my_namespace.my_collection.my_doc_fragment_name
 
 author:
-    - Your Name (@yourGitHubHandle)
+    - Oliver Stadler (@staoli)
 '''
 
 EXAMPLES = r'''
