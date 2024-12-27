@@ -52,7 +52,7 @@ options:
             - When set to True specifies to copy the system dump to an external media if the copy fails at boot time.
         required: false
         type: bool
-    always_allow_dump
+    always_allow_dump:
         description:
             - When set to False and if your machine has a key mode switch, it is required to be in the service position before a dump can be forced with the dump key sequences.
             - When set to True and if your machine has a key mode switch, the reset button or the dump key sequences will force a dump with the key in the normal position.
@@ -60,7 +60,7 @@ options:
         type: bool
     dump_type:
         description:
-            - Specifies whether a traditional or fw-assisted system dump is performed
+             - Specifies whether a traditional or fw-assisted system dump is performed
         required: false
         choices: ['traditional', 'fw-assisted']
         type: str
