@@ -132,12 +132,24 @@ rc:
     type: int
 stdout:
     description: The standard output.
-    returned: If the command failed.
+    returned: always
     type: str
 stderr:
     description: The standard error.
-    returned: If the command failed.
+    returned: always
     type: str
+#- stdout
+#        The command standard output.
+#        returned: always
+#        sample: "Clustering node rabbit@slave1 with rabbit@master \u2026"
+#        type: str
+#
+#- stdout_lines
+#        The command standard output split in lines.
+#        returned: always
+#        sample: ["u'Clustering node rabbit@slave1 with rabbit@master \u2026'"]
+#        type: list
+#
 '''
 
 #    result = dict(
@@ -159,6 +171,17 @@ def get_dump_config(module):
     # Strip newline and double-quotation marks that are sometimes added
     #sysdumpdev_out = stdout.splitlines()[1].split(':', 1)[1].strip('\\\"\n')
 
+    # # sysdumpdev -l
+    # primary              /dev/lg_dumplv
+    # secondary            /dev/dump1
+    # copy directory       /var/adm/ras
+    # forced copy flag     TRUE
+    # always allow dump    FALSE
+    # dump compression     ON
+    # type of dump         fw-assisted
+    # full memory dump     disallow
+    # enable NX GZIP       TRUE
+
     dump_config = {}
     for line in stdout.splitlines():
         if line.startswith('primary'):
@@ -177,6 +200,8 @@ def get_dump_config(module):
             dump_config['dump_type'] = line.split()[-1]
         if line.startswith('full memory dump'):
             dump_config['dump_mode'] = line.split()[-1]
+        if line.startswith('enable NX GZIP'):
+            dump_config['nx_gzip'] = line.split()[-1]
 
     for a in dump_config.keys():
         if isinstance(dump_config[a], str) and dump_config[a] == 'TRUE':
