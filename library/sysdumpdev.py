@@ -330,16 +330,9 @@ def run_module():
           cmd_args.append(module.params['dump_mode'])
           result['changed'] = True
 
-    # if the user is working with this module in only check mode we do not
-    # want to make any changes to the environment, just return the current
-    # state with no modifications
-    #if module.check_mode:
-    #    module.exit_json(**result)
-
       if result['changed']:
         if module.check_mode:
           result['command'] = 'sysdumpdev ' + ' '.join(cmd_args)
-        #msg = 'Failed to run sysdumpdev command: ' + ' '.join(cmd)
           result['msg'] = 'Running in check mode'
         else:
           set_dump_result = set_dump_config(module, cmd_args)
