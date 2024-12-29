@@ -15,7 +15,15 @@ short_description: Manage system dump settings
 
 version_added: "1.0.0"
 
-description: This module allows to update and display the system dump settings using the sysdumpdev command
+description: This module allows to update and display the system dump settings
+
+author:
+    - Oliver Stadler (@staoli)
+
+requirements:
+  - AIX
+  - Python >= 3.6
+  - 'Privileged user with authorizations'
 
 options:
     state:
@@ -37,6 +45,7 @@ options:
     permanent:
         description:
             - Makes updates to the O(primary) or O(secondary) dump device setting permanent
+        default: False
         type: bool
     copy_directory:
         description:
@@ -79,13 +88,6 @@ notes:
       U(https://www.ibm.com/docs/en/aix/7.3?topic=s-sysdumpdev-command)
       U(https://www.ibm.com/docs/en/aix/7.2?topic=s-sysdumpdev-command)
 
-# Specify this value according to your collection
-# in format of namespace.collection.doc_fragment_name
-# extends_documentation_fragment:
-#     - my_namespace.my_collection.my_doc_fragment_name
-
-author:
-    - Oliver Stadler (@staoli)
 '''
 
 EXAMPLES = r'''
@@ -114,7 +116,7 @@ EXAMPLES = r'''
 RETURN = r'''
 # These are examples of possible return values, and in general should use other names for return values.
 command:
-    description: The sysdumpdev command which was executed
+    description: The sysdumpdev command which was executed to update the dump configuration
     type: str
     returned: always
     sample: 'sysdumpdev -D /var/adm/ras'
@@ -127,10 +129,6 @@ sysdumpdev_config:
                 "copy_diretory": "/var/adm/ras",
                 "dump_compression": true,
               }'
-msg:
-    description: The execution message.
-    returned: always
-    type: str
 rc:
     description: The return code.
     returned: If the command failed.
@@ -143,26 +141,12 @@ stderr:
     description: The standard error.
     returned: always
     type: str
-#- stdout
-#        The command standard output.
-#        returned: always
-#        sample: "Clustering node rabbit@slave1 with rabbit@master \u2026"
-#        type: str
-#
-#- stdout_lines
-#        The command standard output split in lines.
-#        returned: always
-#        sample: ["u'Clustering node rabbit@slave1 with rabbit@master \u2026'"]
-#        type: list
-#
+msg:
+    description: The message if the module is exited with a failure or if no actions were required
+    returned: when failed or no action required
+    type: str
 '''
 
-#    result = dict(
-#        changed=False,
-#        command='',
-#        stdout='',
-#        stderr='',
-#        sysdumpdev_config='',
 from ansible.module_utils.basic import AnsibleModule
 
 def get_dump_config(module):
@@ -172,9 +156,6 @@ def get_dump_config(module):
     if rc != 0:
         msg = 'Failed to run sysdumpdev command: ' + ' '.join(cmd)
         module.fail_json(msg=msg, rc=rc, stdout=stdout, stderr=stderr)
-
-    # Strip newline and double-quotation marks that are sometimes added
-    #sysdumpdev_out = stdout.splitlines()[1].split(':', 1)[1].strip('\\\"\n')
 
     # # sysdumpdev -l
     # primary              /dev/lg_dumplv
@@ -190,23 +171,23 @@ def get_dump_config(module):
     dump_config = {}
     for line in stdout.splitlines():
         if line.startswith('primary'):
-            dump_config['primary'] = line.split()[-1]
+            dump_config['primary'] = line.split()[1]
         if line.startswith('secondary'):
-            dump_config['secondary'] = line.split()[-1]
+            dump_config['secondary'] = line.split()[1]
         if line.startswith('copy directory'):
-            dump_config['copy_directory'] = line.split()[-1]
+            dump_config['copy_directory'] = line.split()[2]
         if line.startswith('forced copy flag'):
-            dump_config['forced_copy_flag'] = line.split()[-1]
+            dump_config['forced_copy_flag'] = line.split()[3]
         if line.startswith('always allow dump'):
-            dump_config['always_allow_dump'] = line.split()[-1]
+            dump_config['always_allow_dump'] = line.split()[3]
         if line.startswith('dump compression'):
-            dump_config['dump_compression'] = line.split()[-1]
+            dump_config['dump_compression'] = line.split()[2]
         if line.startswith('type of dump'):
-            dump_config['dump_type'] = line.split()[-1]
+            dump_config['dump_type'] = line.split()[3]
         if line.startswith('full memory dump'):
-            dump_config['dump_mode'] = line.split()[-1]
+            dump_config['dump_mode'] = line.split()[3]
         if line.startswith('enable NX GZIP'):
-            dump_config['nx_gzip'] = line.split()[-1]
+            dump_config['nx_gzip'] = line.split()[3]
 
     for a in dump_config.keys():
         if isinstance(dump_config[a], str) and dump_config[a] == 'TRUE':
@@ -239,12 +220,11 @@ def set_dump_config(module, cmd_args):
 
 
 def run_module():
-    # define available arguments/parameters a user can pass to the module
     module_args = dict(
-        state=dict(type='str', required=False, choices=['present', 'info'], default='info'),
+        state=dict(type='str', required=False, choices=['present', 'info'], default='present'),
         primary=dict(type='path', required=False),
         secondary=dict(type='path', required=False),
-        permanent=dict(type='bool', required=False),
+        permanent=dict(type='bool', required=False, default=False),
         copy_directory=dict(type='path', required=False),
         forced_copy_flag=dict(type='bool', required=False),
         always_allow_dump=dict(type='bool', required=False),
@@ -253,24 +233,13 @@ def run_module():
         dump_mode=dict(type='str', required=False, choices=['disallow', 'allow', 'allow_kernel', 'require_kernel', 'allow_full', 'require_full'])
     )
 
-    # seed the result dict in the object
-    # we primarily care about changed and state
-    # changed is if this module effectively modified the target
-    # state will include any data that you want your module to pass back
-    # for consumption, for example, in a subsequent task
     result = dict(
         changed=False,
         command='',
         stdout='',
         stderr=''
     )
-        #sysdumpdev_config='',
-        #original_config=''
 
-    # the AnsibleModule object will be our abstraction working with Ansible
-    # this includes instantiation, a couple of common attr would be the
-    # args/params passed to the execution, as well as if the module
-    # supports check mode
     module = AnsibleModule(
         argument_spec=module_args,
         supports_check_mode=True,
@@ -281,51 +250,43 @@ def run_module():
         required_together=[
           [ 'forced_copy_flag', 'copy_directory']
         ]
-          #('forced_copy_flag', True, ['copy_directory']),
     )
 
     # Check if the 'dump_type' is 'fw-assisted' when 'dump_mode' is specified.
     if module.params.get('dump_mode') and module.params.get('dump_type') != 'fw-assisted':
         module.fail_json(msg="If 'dump_mode' is specified, 'dump_type' must be 'fw-assisted'.")
 
-    # if the user is working with this module in only check mode we do not
-    # want to make any changes to the environment, just return the current
-    # state with no modifications
-    if module.check_mode:
-        module.exit_json(**result)
-
     current_config = get_dump_config(module)
 
     if module.params['state'] == 'info':
       result['sysdumpdev_config'] = current_config 
-    #else:
-    #  result['original_config'] = current_config 
-
+    else:
       cmd_args = []
 
       if module.params['primary'] is not None and ( module.params['primary'] != current_config['primary'] ):
           cmd_args.append('-p')
           cmd_args.append(module.params['primary'])
+          if module.params['permanent']:
+            cmd_args.append('-P')
           result['changed'] = True
 
       if module.params['secondary'] is not None and ( module.params['secondary'] != current_config['secondary'] ):
           cmd_args.append('-s')
           cmd_args.append(module.params['secondary'])
+          if module.params['permanent']:
+            cmd_args.append('-P')
           result['changed'] = True
-
-      if module.params['permanent']:
-          cmd_args.append('-P')
 
       target_copy_directory = current_config['copy_directory']
       target_forced_copy_flag = current_config['forced_copy_flag']
       copy_directory_change = False
       forced_copy_flag_change = False
 
-      if module.params['copy_directory'] is not None and (module.params['copy_directory'] != current_config['copy_directory']):
+      if module.params['copy_directory'] is not None and ( module.params['copy_directory'] != current_config['copy_directory'] ):
           copy_directory_change = True
           target_copy_directory = module.params['copy_directory']
 
-      if module.params['forced_copy_flag'] is not None and (module.params['forced_copy_flag'] != current_config['forced_copy_flag']):
+      if module.params['forced_copy_flag'] is not None and ( module.params['forced_copy_flag'] != current_config['forced_copy_flag'] ):
           forced_copy_flag_change = True
           target_forced_copy_flag = module.params['forced_copy_flag']
 
@@ -337,13 +298,15 @@ def run_module():
           result['changed'] = True
           cmd_args.append(target_copy_directory)
 
-      if module.params['always_allow_dump'] is not None:
+      if module.params['always_allow_dump'] is not None and ( module.params['always_allow_dump'] != current_config['always_allow_dump'] ):
           if module.params['always_allow_dump']:
               cmd_args.append('-K')
           else:
               cmd_args.append('-k')
+          result['changed'] = True
 
       if module.params['nx_gzip'] is not None:
+        # nx_gzip is not necessarily enabled so we check if the nx_gzip attribute is really defined
         if 'nx_gzip' in current_config.keys():
           if module.params['nx_gzip'] != current_config['nx_gzip']:
             if module.params['nx_gzip'] == True:
@@ -367,27 +330,25 @@ def run_module():
           cmd_args.append(module.params['dump_mode'])
           result['changed'] = True
 
+    # if the user is working with this module in only check mode we do not
+    # want to make any changes to the environment, just return the current
+    # state with no modifications
+    #if module.check_mode:
+    #    module.exit_json(**result)
+
       if result['changed']:
-        set_dump_result = set_dump_config(module, cmd_args)
-        result['command'] = set_dump_result['cmd']
-        result['rc'] = set_dump_result['rc']
-        result['stdout'] = set_dump_result['stdout']
-        result['stderr'] = set_dump_result['stderr']
-        #result['original_config'] = current_config
-
-    # manipulate or modify the state as needed (this is going to be the
-    # part where your module will do what it needs to do)
-
-    # use whatever logic you need to determine whether or not this module
-    # made any modifications to your target
-    #if module.params['primary']:
-    #    result['changed'] = True
-
-    # during the execution of the module, if there is an exception or a
-    # conditional state that effectively causes a failure, run
-    # AnsibleModule.fail_json() to pass in the message and the result
-    if module.params['primary'] == 'fail me':
-        module.fail_json(msg='You requested this to fail', **result)
+        if module.check_mode:
+          result['command'] = 'sysdumpdev ' + ' '.join(cmd_args)
+        #msg = 'Failed to run sysdumpdev command: ' + ' '.join(cmd)
+          result['msg'] = 'Running in check mode'
+        else:
+          set_dump_result = set_dump_config(module, cmd_args)
+          result['command'] = set_dump_result['cmd']
+          result['rc'] = set_dump_result['rc']
+          result['stdout'] = set_dump_result['stdout']
+          result['stderr'] = set_dump_result['stderr']
+      else:
+        result['msg'] = 'No modification is required'
 
     # in the event of a successful module execution, you will want to
     # simple AnsibleModule.exit_json(), passing the key/value results

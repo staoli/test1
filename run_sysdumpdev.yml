@@ -5,6 +5,18 @@
   become: true
   remote_user: ost
 
+#        state=dict(type='str', required=False, choices=['present', 'info'], default='info'),
+#        primary=dict(type='path', required=False),
+#        secondary=dict(type='path', required=False),
+#        permanent=dict(type='bool', required=False),
+#        copy_directory=dict(type='path', required=False),
+#        forced_copy_flag=dict(type='bool', required=False),
+#        always_allow_dump=dict(type='bool', required=False),
+#        nx_gzip=dict(type='bool', required=False),
+#        dump_type=dict(type='str', required=False, choices=['traditional', 'fw-assisted']),
+#        dump_mode=dict(type='str', required=False, choices=['disallow', 'allow', 'allow_kernel', 'require_kernel', 'allow_full', 'require_full'])
+
+
   tasks:
    - name: just a test
      ansible.builtin.shell:
@@ -19,15 +31,17 @@
 
    - name: configure sysdump
      sysdumpdev:
-       state: present
-       #nx_gzip: True
-       #secondary: /dev/dump1
-       #permanent: true
-       #copy_directory: /var/adm/ras
-       #forced_copy_flag: True
+       #state: info
+       nx_gzip: False
+       primary: /dev/dump0
+       secondary: /dev/dump1
+       permanent: True
+       copy_directory: /var/adm/ras
+       forced_copy_flag: True
+       always_allow_dump: False
        #dump_type: traditional
        dump_type: fw-assisted
-       #dump_mode: allow_kernel
+       dump_mode: allow_kernel
        #dump_mode: disallow
      register: dout
      tags: dump
