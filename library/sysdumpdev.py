@@ -24,7 +24,7 @@ options:
         - C(present) specifies to update the system dump settings
         - C(info) specifies to retrieve the current system dump settings
         choices: ['present', 'info']
-        default: info
+        default: present
         type: str
     primary:
         description:
@@ -33,7 +33,6 @@ options:
     secondary:
         description:
             - Specifies the secondary dump device
-        required: false
         type: str
     permanent:
         description:
@@ -42,7 +41,6 @@ options:
     copy_directory:
         description:
             - Specifies the directory to where the dump is copied to at system boot
-        required: false
         type: str
     forced_copy_flag:
         description:
@@ -54,24 +52,27 @@ options:
         description:
             - If set to V(true) and if your machine has a key mode switch, the reset button or the dump key sequences will force a dump with the key in the normal position.
             - If set to V(false) and if your machine has a key mode switch, it is required to be in the service position before a dump can be forced with the dump key sequences.
-        required: false
         type: bool
     dump_type:
         description:
-             - Specifies whether a traditional or fw-assisted system dump is performed
-        required: false
+             - Specifies whether a V(traditional) or V(fw-assisted) system dump is performed
+             - V(fw-assisted) will required a reboot to become active
         choices: ['traditional', 'fw-assisted']
         type: str
     dump_mode:
         description:
-            - Specifies the dump mode
+            - Specifies the dump mode. fw-assisted dump type must be active before this setting can be modified. If the system was conifigured with traditional dump type it first must been rebooted for fw-assisted dump to be active and only then you can modify the dump_mode.
             - C(disallow) specifies that neither the full memory system dump mode nor the kernel memory system dump mode is allowed. It is the selective memory mode.
             - C(allow_full) specifies that the full memory system dump mode is allowed but is performed only when operating system cannot properly handle the dump request.
             - C(require_full) specifies that the full memory system dump mode is allowed and is always performed.
             - Requires the O(dump_type=fw-assisted) option to be specified
-        required: false
         choices: ['disallow', 'allow', 'allow_kernel', 'require_kernel', 'allow_full', 'require_full']
         type: str
+    nx_gzip:
+        description:
+            - If set to V(true) enables the Nest Accelerators (NX) GZIP accelerated dump compression
+            - If set to V(false) disables the Nest Accelerators (NX) GZIP dump compression
+        type: bool
 
 notes: 
     - You can refer to the IBM documentation for additional information on the commands used at
@@ -99,10 +100,14 @@ EXAMPLES = r'''
        copy_directory: /var/adm/ras
        forced_copy_flag: True
 
-- name: Configure fw-assisted and allow full memory system dump mode always be performed.
+- name: Retrieve the current dump configuration
   ibm.power_aix.sysdumpdev:
-       dump_type: fw-assisted
-       dump_mode: require_full
+      state: info
+
+#- name: Configure fw-assisted and allow full memory system dump mode always be performed.
+#  ibm.power_aix.sysdumpdev:
+#       dump_type: fw-assisted
+#       dump_mode: require_full
 
 '''
 
@@ -243,6 +248,7 @@ def run_module():
         copy_directory=dict(type='path', required=False),
         forced_copy_flag=dict(type='bool', required=False),
         always_allow_dump=dict(type='bool', required=False),
+        nx_gzip=dict(type='bool', required=False),
         dump_type=dict(type='str', required=False, choices=['traditional', 'fw-assisted']),
         dump_mode=dict(type='str', required=False, choices=['disallow', 'allow', 'allow_kernel', 'require_kernel', 'allow_full', 'require_full'])
     )
@@ -256,10 +262,10 @@ def run_module():
         changed=False,
         command='',
         stdout='',
-        stderr='',
-        sysdumpdev_config='',
-        original_config=''
+        stderr=''
     )
+        #sysdumpdev_config='',
+        #original_config=''
 
     # the AnsibleModule object will be our abstraction working with Ansible
     # this includes instantiation, a couple of common attr would be the
@@ -269,8 +275,8 @@ def run_module():
         argument_spec=module_args,
         supports_check_mode=True,
         required_if=[
-          ('permanent', True, ['primary', 'secondary'], True),
-          ('dump_type', 'fw-assisted', ['dump_mode'])
+          ('permanent', True, ['primary', 'secondary'], True)
+          #('dump_type', 'fw-assisted', ['dump_mode'])
         ],
         required_together=[
           [ 'forced_copy_flag', 'copy_directory']
@@ -292,8 +298,8 @@ def run_module():
 
     if module.params['state'] == 'info':
       result['sysdumpdev_config'] = current_config 
-    else:
-      result['original_config'] = current_config 
+    #else:
+    #  result['original_config'] = current_config 
 
       cmd_args = []
 
@@ -337,6 +343,17 @@ def run_module():
           else:
               cmd_args.append('-k')
 
+      if module.params['nx_gzip'] is not None:
+        if 'nx_gzip' in current_config.keys():
+          if module.params['nx_gzip'] != current_config['nx_gzip']:
+            if module.params['nx_gzip'] == True:
+              cmd_args.append('-N')
+            else:
+              cmd_args.append('-n')
+            result['changed'] = True
+        else:
+          module.fail_json(msg='nx_gzip option not available on target system', **result)
+
       if module.params['dump_type'] is not None and (module.params['dump_type'] != current_config['dump_type']) :
           cmd_args.append('-t')
           cmd_args.append(module.params['dump_type'])
@@ -353,7 +370,10 @@ def run_module():
       if result['changed']:
         set_dump_result = set_dump_config(module, cmd_args)
         result['command'] = set_dump_result['cmd']
-        result['original_config'] = current_config
+        result['rc'] = set_dump_result['rc']
+        result['stdout'] = set_dump_result['stdout']
+        result['stderr'] = set_dump_result['stderr']
+        #result['original_config'] = current_config
 
     # manipulate or modify the state as needed (this is going to be the
     # part where your module will do what it needs to do)

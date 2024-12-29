@@ -8,22 +8,26 @@
   tasks:
    - name: just a test
      ansible.builtin.shell:
-       cmd: sysdumpdev -l
+       cmd: sleep 1
      register: out
+     tags: tt
 
    - name: print before output
      ansible.builtin.debug:
        var: out
+     tags: tt
 
    - name: configure sysdump
      sysdumpdev:
-       secondary: /dev/dump1
-       permanent: true
-       copy_directory: /var/adm/ras
-       forced_copy_flag: True
+       state: present
+       #nx_gzip: True
+       #secondary: /dev/dump1
+       #permanent: true
+       #copy_directory: /var/adm/ras
+       #forced_copy_flag: True
        #dump_type: traditional
        dump_type: fw-assisted
-       dump_mode: allow_kernel
+       #dump_mode: allow_kernel
        #dump_mode: disallow
      register: dout
      tags: dump
@@ -31,6 +35,7 @@
    - name: print after output
      ansible.builtin.debug:
        var: dout
+     tags: dump
 #copy_directory=/var/adm/ras forced_copy_flag=False dump_type=fw-assisted dump_mode=disallow'
 
 ...
