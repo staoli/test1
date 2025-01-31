@@ -1,7 +1,5 @@
 #!/usr/bin/python
 
-# ANSIBLE_LIBRARY=./library ansible -m sysdumpdev -a 'copy_directory=/var/adm/ras forced_copy_flag=True dump_type=fw-assisted dump_mode=disallow' localhost
-
 # Copyright: (c) 2018, Terry Jones <terry.jones@example.org>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 from __future__ import (absolute_import, division, print_function)
@@ -13,7 +11,7 @@ module: sysdumpdev
 
 short_description: Manage system dump settings
 
-version_added: "1.0.0"
+version_added: "2.1.0"
 
 description: This module allows to update and display the system dump settings
 
@@ -27,21 +25,21 @@ requirements:
 
 options:
     state:
-        description: 
+        description:
         - Specifies the action to be performed
         - C(present) specifies to update the system dump settings
-        - C(info) specifies to retrieve the current system dump settings
-        choices: ['present', 'info']
+        - C(fact) specifies to retrieve the current system dump settings
+        choices: ['present', 'fact']
         default: present
         type: str
     primary:
         description:
             - Specifies the primary dump device
-        type: str
+        type: path
     secondary:
         description:
             - Specifies the secondary dump device
-        type: str
+        type: path
     permanent:
         description:
             - Makes updates to the O(primary) or O(secondary) dump device setting permanent
@@ -50,7 +48,7 @@ options:
     copy_directory:
         description:
             - Specifies the directory to where the dump is copied to at system boot
-        type: str
+        type: path
     forced_copy_flag:
         description:
             - If set to V(true) specifies to copy the system dump to an external media if the copy fails at boot time.
@@ -59,8 +57,8 @@ options:
         type: bool
     always_allow_dump:
         description:
-            - If set to V(true) and if your machine has a key mode switch, the reset button or the dump key sequences will force a dump with the key in the normal position.
-            - If set to V(false) and if your machine has a key mode switch, it is required to be in the service position before a dump can be forced with the dump key sequences.
+            - If V(true) and machine has a key mode switch, the reset button or the dump key sequences will force a dump with the key in the normal position.
+            - If V(false) and machine has a key mode switch, it is required to be in the service position before a dump can be forced.
         type: bool
     dump_type:
         description:
@@ -70,9 +68,10 @@ options:
         type: str
     dump_mode:
         description:
-            - Specifies the dump mode. fw-assisted dump type must be active before this setting can be modified. If the system was conifigured with traditional dump type it first must been rebooted for fw-assisted dump to be active and only then you can modify the dump_mode.
-            - C(disallow) specifies that neither the full memory system dump mode nor the kernel memory system dump mode is allowed. It is the selective memory mode.
-            - C(allow_full) specifies that the full memory system dump mode is allowed but is performed only when operating system cannot properly handle the dump request.
+            - Specifies the dump mode. fw-assisted dump type must be active before this setting can be modified.
+            - If the system was configured with traditional dump type it first must been rebooted in order to modify the dump_mode.
+            - C(disallow) specifies that neither the full memory system dump mode nor the kernel memory system dump mode is allowed.
+            - C(allow_full) specifies that the full memory system dump mode is allowed.
             - C(require_full) specifies that the full memory system dump mode is allowed and is always performed.
             - Requires the O(dump_type=fw-assisted) option to be specified
         choices: ['disallow', 'allow', 'allow_kernel', 'require_kernel', 'allow_full', 'require_full']
@@ -83,7 +82,7 @@ options:
             - If set to V(false) disables the Nest Accelerators (NX) GZIP dump compression
         type: bool
 
-notes: 
+notes:
     - You can refer to the IBM documentation for additional information on the commands used at
       U(https://www.ibm.com/docs/en/aix/7.3?topic=s-sysdumpdev-command)
       U(https://www.ibm.com/docs/en/aix/7.2?topic=s-sysdumpdev-command)
@@ -104,12 +103,12 @@ EXAMPLES = r'''
 
 - name: Retrieve the current dump configuration
   ibm.power_aix.sysdumpdev:
-      state: info
+      state: fact
 
-#- name: Configure fw-assisted and allow full memory system dump mode always be performed.
-#  ibm.power_aix.sysdumpdev:
-#       dump_type: fw-assisted
-#       dump_mode: require_full
+- name: Configure fw-assisted dump with full memory system dump mode
+  ibm.power_aix.sysdumpdev:
+       dump_type: fw-assisted
+       dump_mode: require_full
 
 '''
 
@@ -120,15 +119,6 @@ command:
     type: str
     returned: always
     sample: 'sysdumpdev -D /var/adm/ras'
-sysdumpdev_config:
-    description: The current sysdumpdev settings
-    type: dict
-    returned: If O(state=info) is specified
-    sample: '"sysdumpdev_config": {
-                "always_allow_dump": true,
-                "copy_diretory": "/var/adm/ras",
-                "dump_compression": true,
-              }'
 rc:
     description: The return code.
     returned: If the command failed.
@@ -149,24 +139,21 @@ msg:
 
 from ansible.module_utils.basic import AnsibleModule
 
+
 def get_dump_config(module):
+    """
+    Determines the current dump settings
+    param module: 
+        Ansible module argument spec.
+    return: 
+        dump_config (dict) - Parsed sysdumpdev -l output
+    """
     sysdumpdev_command = module.get_bin_path('sysdumpdev', required=True)
     cmd = [sysdumpdev_command, '-l']
     rc, stdout, stderr = module.run_command(cmd)
     if rc != 0:
         msg = 'Failed to run sysdumpdev command: ' + ' '.join(cmd)
         module.fail_json(msg=msg, rc=rc, stdout=stdout, stderr=stderr)
-
-    # # sysdumpdev -l
-    # primary              /dev/lg_dumplv
-    # secondary            /dev/dump1
-    # copy directory       /var/adm/ras
-    # forced copy flag     TRUE
-    # always allow dump    FALSE
-    # dump compression     ON
-    # type of dump         fw-assisted
-    # full memory dump     disallow
-    # enable NX GZIP       TRUE
 
     dump_config = {}
     for line in stdout.splitlines():
@@ -189,19 +176,29 @@ def get_dump_config(module):
         if line.startswith('enable NX GZIP'):
             dump_config['nx_gzip'] = line.split()[3]
 
-    for a in dump_config.keys():
-        if isinstance(dump_config[a], str) and dump_config[a] == 'TRUE':
-            dump_config[a] = True
-        if isinstance(dump_config[a], str) and dump_config[a] == 'FALSE':
-            dump_config[a] = False
-        if isinstance(dump_config[a], str) and dump_config[a] == 'ON':
-            dump_config[a] = True
-        if isinstance(dump_config[a], str) and dump_config[a] == 'OFF':
-            dump_config[a] = False
+    for key, value in dump_config.items():
+        if isinstance(value, str) and value == 'TRUE':
+            dump_config[key] = True
+        if isinstance(value, str) and value == 'FALSE':
+            dump_config[key] = False
+        if isinstance(value, str) and value == 'ON':
+            dump_config[key] = True
+        if isinstance(value, str) and value == 'OFF':
+            dump_config[key] = False
 
     return dict(dump_config)
 
+
 def set_dump_config(module, cmd_args):
+    """
+    Set dump settings
+    param module: 
+        Ansible module argument spec.
+    param cmd_args: 
+        Arguments for the sysdumpdev command.
+    return: 
+        return_dict (dict) - Dict containing command results 
+    """
     sysdumpdev_command = module.get_bin_path('sysdumpdev', required=True)
     cmd = [sysdumpdev_command] + cmd_args
     rc, stdout, stderr = module.run_command(cmd)
@@ -210,18 +207,123 @@ def set_dump_config(module, cmd_args):
         module.fail_json(msg=msg, rc=rc, stdout=stdout, stderr=stderr)
 
     return_dict = {
+        'changed': False,
         'cmd': ' '.join(cmd),
         'rc': rc,
         'stdout': stdout,
         'stderr': stderr,
     }
 
-    return return_dict
+    return dict(return_dict)
+
+
+def update_dump_config(module, current_config):
+    """
+    Determine what dump settings need to be changed, create argument string for the sysdumpdev command and perform the update
+    param module: 
+        Ansible module argument spec.
+    param current_config: 
+        Current dump configuration.
+    return: 
+        return_dict (dict) - Dict containing changed status, issued command along with command result and command output
+    """
+    return_dict = {
+        'changed': False,
+        'cmd': '',
+        'rc': '',
+        'stdout': '',
+        'stderr': '',
+    }
+
+    cmd_args = []
+
+    dump_device_changed = False
+    if module.params['primary'] is not None and (module.params['primary'] != current_config['primary']):
+        cmd_args.append('-p')
+        cmd_args.append(module.params['primary'])
+        dump_device_changed = True
+        return_dict['changed'] = True
+
+    if module.params['secondary'] is not None and (module.params['secondary'] != current_config['secondary']):
+        cmd_args.append('-s')
+        cmd_args.append(module.params['secondary'])
+        dump_device_changed = True
+        return_dict['changed'] = True
+
+    if module.params['permanent'] and dump_device_changed:
+        cmd_args.append('-P')
+
+    target_copy_directory = current_config['copy_directory']
+    target_forced_copy_flag = current_config['forced_copy_flag']
+    copy_directory_change = False
+    forced_copy_flag_change = False
+
+    if module.params['copy_directory'] is not None and (module.params['copy_directory'] != current_config['copy_directory']):
+        copy_directory_change = True
+        target_copy_directory = module.params['copy_directory']
+
+    if module.params['forced_copy_flag'] is not None and (module.params['forced_copy_flag'] != current_config['forced_copy_flag']):
+        forced_copy_flag_change = True
+        target_forced_copy_flag = module.params['forced_copy_flag']
+
+    if copy_directory_change or forced_copy_flag_change:
+        if target_forced_copy_flag is True:
+            cmd_args.append('-D')
+        else:
+            cmd_args.append('-d')
+        return_dict['changed'] = True
+        cmd_args.append(target_copy_directory)
+
+    if module.params['always_allow_dump'] is not None and (module.params['always_allow_dump'] != current_config['always_allow_dump']):
+        if module.params['always_allow_dump']:
+            cmd_args.append('-K')
+        else:
+            cmd_args.append('-k')
+        return_dict['changed'] = True
+
+    if module.params['nx_gzip'] is not None:
+        # nx_gzip is not necessarily enabled so we check if the nx_gzip attribute is really defined
+        if 'nx_gzip' in current_config.keys():
+            if module.params['nx_gzip'] != current_config['nx_gzip']:
+                if module.params['nx_gzip'] is True:
+                    cmd_args.append('-N')
+                else:
+                    cmd_args.append('-n')
+                return_dict['changed'] = True
+        else:
+            module.fail_json(msg='nx_gzip option not available on target system', **return_dict)
+
+    if module.params['dump_type'] is not None and (module.params['dump_type'] != current_config['dump_type']):
+        cmd_args.append('-t')
+        cmd_args.append(module.params['dump_type'])
+        return_dict['changed'] = True
+
+    if module.params['dump_mode'] is not None:
+        if current_config['dump_type'] != 'fw-assisted':
+            module.fail_json(msg='dump_type must be fw-assisted before you configure dump_mode', **return_dict)
+        elif (current_config['dump_type'] == 'fw-assisted') and (module.params['dump_mode'] != current_config['dump_mode']):
+            cmd_args.append('-f')
+            cmd_args.append(module.params['dump_mode'])
+            return_dict['changed'] = True
+
+    if return_dict['changed']:
+        if module.check_mode:
+            return_dict['cmd'] = 'sysdumpdev ' + ' '.join(cmd_args)
+        else:
+            set_dump_result = set_dump_config(module, cmd_args)
+            return_dict['cmd'] = set_dump_result['cmd']
+            return_dict['rc'] = set_dump_result['rc']
+            return_dict['stdout'] = set_dump_result['stdout']
+            return_dict['stderr'] = set_dump_result['stderr']
+    else:
+        return_dict['rc'] = 0
+        return_dict['msg'] = 'No modification is required'
+    return dict(return_dict)
 
 
 def run_module():
     module_args = dict(
-        state=dict(type='str', required=False, choices=['present', 'info'], default='present'),
+        state=dict(type='str', required=False, choices=['present', 'fact'], default='present'),
         primary=dict(type='path', required=False),
         secondary=dict(type='path', required=False),
         permanent=dict(type='bool', required=False, default=False),
@@ -235,7 +337,7 @@ def run_module():
 
     result = dict(
         changed=False,
-        command='',
+        cmd='',
         stdout='',
         stderr=''
     )
@@ -244,11 +346,10 @@ def run_module():
         argument_spec=module_args,
         supports_check_mode=True,
         required_if=[
-          ('permanent', True, ['primary', 'secondary'], True)
-          #('dump_type', 'fw-assisted', ['dump_mode'])
+            ('permanent', True, ['primary', 'secondary'], True)
         ],
         required_together=[
-          [ 'forced_copy_flag', 'copy_directory']
+            ['forced_copy_flag', 'copy_directory']
         ]
     )
 
@@ -258,93 +359,11 @@ def run_module():
 
     current_config = get_dump_config(module)
 
-    if module.params['state'] == 'info':
-      result['sysdumpdev_config'] = current_config 
+    if module.params['state'] == 'fact':
+        result['sysdumpdev_config'] = current_config
     else:
-      cmd_args = []
+        result = update_dump_config(module, current_config)
 
-      if module.params['primary'] is not None and ( module.params['primary'] != current_config['primary'] ):
-          cmd_args.append('-p')
-          cmd_args.append(module.params['primary'])
-          if module.params['permanent']:
-            cmd_args.append('-P')
-          result['changed'] = True
-
-      if module.params['secondary'] is not None and ( module.params['secondary'] != current_config['secondary'] ):
-          cmd_args.append('-s')
-          cmd_args.append(module.params['secondary'])
-          if module.params['permanent']:
-            cmd_args.append('-P')
-          result['changed'] = True
-
-      target_copy_directory = current_config['copy_directory']
-      target_forced_copy_flag = current_config['forced_copy_flag']
-      copy_directory_change = False
-      forced_copy_flag_change = False
-
-      if module.params['copy_directory'] is not None and ( module.params['copy_directory'] != current_config['copy_directory'] ):
-          copy_directory_change = True
-          target_copy_directory = module.params['copy_directory']
-
-      if module.params['forced_copy_flag'] is not None and ( module.params['forced_copy_flag'] != current_config['forced_copy_flag'] ):
-          forced_copy_flag_change = True
-          target_forced_copy_flag = module.params['forced_copy_flag']
-
-      if copy_directory_change or forced_copy_flag_change:
-          if target_forced_copy_flag == True:
-              cmd_args.append('-D')
-          else:
-              cmd_args.append('-d')
-          result['changed'] = True
-          cmd_args.append(target_copy_directory)
-
-      if module.params['always_allow_dump'] is not None and ( module.params['always_allow_dump'] != current_config['always_allow_dump'] ):
-          if module.params['always_allow_dump']:
-              cmd_args.append('-K')
-          else:
-              cmd_args.append('-k')
-          result['changed'] = True
-
-      if module.params['nx_gzip'] is not None:
-        # nx_gzip is not necessarily enabled so we check if the nx_gzip attribute is really defined
-        if 'nx_gzip' in current_config.keys():
-          if module.params['nx_gzip'] != current_config['nx_gzip']:
-            if module.params['nx_gzip'] == True:
-              cmd_args.append('-N')
-            else:
-              cmd_args.append('-n')
-            result['changed'] = True
-        else:
-          module.fail_json(msg='nx_gzip option not available on target system', **result)
-
-      if module.params['dump_type'] is not None and (module.params['dump_type'] != current_config['dump_type']) :
-          cmd_args.append('-t')
-          cmd_args.append(module.params['dump_type'])
-          result['changed'] = True
-
-      if module.params['dump_mode'] is not None:
-        if current_config['dump_type'] != 'fw-assisted':
-          module.fail_json(msg='dump_type must be fw-assisted before you configure dump_mode', **result)
-        elif ( current_config['dump_type'] == 'fw-assisted' ) and ( module.params['dump_mode'] != current_config['dump_mode']):
-          cmd_args.append('-f')
-          cmd_args.append(module.params['dump_mode'])
-          result['changed'] = True
-
-      if result['changed']:
-        if module.check_mode:
-          result['command'] = 'sysdumpdev ' + ' '.join(cmd_args)
-          result['msg'] = 'Running in check mode'
-        else:
-          set_dump_result = set_dump_config(module, cmd_args)
-          result['command'] = set_dump_result['cmd']
-          result['rc'] = set_dump_result['rc']
-          result['stdout'] = set_dump_result['stdout']
-          result['stderr'] = set_dump_result['stderr']
-      else:
-        result['msg'] = 'No modification is required'
-
-    # in the event of a successful module execution, you will want to
-    # simple AnsibleModule.exit_json(), passing the key/value results
     module.exit_json(**result)
 
 
