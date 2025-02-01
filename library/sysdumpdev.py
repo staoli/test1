@@ -146,7 +146,7 @@ def get_dump_config(module):
     param module: 
         Ansible module argument spec.
     return: 
-        dump_config (dict) - Parsed sysdumpdev -l output
+        dump_config (dict) - Parsed sysdumpdev -l output.
     """
     sysdumpdev_command = module.get_bin_path('sysdumpdev', required=True)
     cmd = [sysdumpdev_command, '-l']
@@ -197,7 +197,13 @@ def set_dump_config(module, cmd_args):
     param cmd_args: 
         Arguments for the sysdumpdev command.
     return: 
-        return_dict (dict) - Dict containing command results 
+        return_dict (dict) - Dict containing sysdumpdev command results.
+    return:
+        return_dict (dict) - Dict containing sysdumpdev command results with following keys: value
+            "cmd": sysdumpdev command executed (str)
+            "rc": return code (int)
+            "stdout": standard out (list)
+            "stderr": standard error (list)
     """
     sysdumpdev_command = module.get_bin_path('sysdumpdev', required=True)
     cmd = [sysdumpdev_command] + cmd_args
@@ -206,8 +212,8 @@ def set_dump_config(module, cmd_args):
         msg = 'Failed to run sysdumpdev command: ' + ' '.join(cmd)
         module.fail_json(msg=msg, rc=rc, stdout=stdout, stderr=stderr)
 
+    #ZZ    'changed': False,
     return_dict = {
-        'changed': False,
         'cmd': ' '.join(cmd),
         'rc': rc,
         'stdout': stdout,
@@ -225,7 +231,12 @@ def update_dump_config(module, current_config):
     param current_config: 
         Current dump configuration.
     return: 
-        return_dict (dict) - Dict containing changed status, issued command along with command result and command output
+        return_dict (dict) - Dict containing sysdumpdev command results with following keys: value
+            "changed": flag if dump configuration was updated (bool)
+            "cmd": sysdumpdev command executed (str)
+            "rc": return code (int)
+            "stdout": standard out (list)
+            "stderr": standard error (list)
     """
     return_dict = {
         'changed': False,
@@ -322,6 +333,9 @@ def update_dump_config(module, current_config):
 
 
 def run_module():
+    """
+    Main module function. Exits with module.exit_json(**result).
+    """
     module_args = dict(
         state=dict(type='str', required=False, choices=['present', 'fact'], default='present'),
         primary=dict(type='path', required=False),
